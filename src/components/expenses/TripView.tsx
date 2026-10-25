@@ -163,6 +163,24 @@ export function TripView({ trip }: { trip: TripDetailDTO }) {
     }
   };
 
+  const [excelBusy, setExcelBusy] = useState(false);
+  // One download button in the header, then a choice of format — a second
+  // round button would squeeze the trip name off a phone screen.
+  const [downloadOpen, setDownloadOpen] = useState(false);
+  // Same for exceljs — it only loads when someone asks for the workbook.
+  const exportExcel = async () => {
+    setExcelBusy(true);
+    setError(null);
+    try {
+      const { downloadTripExcel } = await import("@/lib/trip-excel");
+      await downloadTripExcel(trip);
+    } catch {
+      setError("Could not generate the Excel file. Please try again.");
+    } finally {
+      setExcelBusy(false);
+    }
+  };
+
   const friendFilterOptions: FilterOption<number | undefined>[] = [
     { key: "all", label: "All friends", value: undefined, count: trip.entries.length },
     ...trip.participants.map((person) => ({
@@ -302,10 +320,10 @@ export function TripView({ trip }: { trip: TripDetailDTO }) {
             {trip.closedAt !== null ? (
               <button
                 type="button"
-                onClick={exportPdf}
-                disabled={pdfBusy}
-                aria-label={pdfBusy ? "Preparing PDF…" : "Download trip statement (PDF)"}
-                title={pdfBusy ? "Preparing PDF…" : "Download trip statement (PDF)"}
+                onClick={() => setDownloadOpen(true)}
+                disabled={pdfBusy || excelBusy}
+                aria-label="Download trip statement"
+                title="Download trip statement"
                 className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-ios-surface text-ios-blue shadow-ios active:scale-95 disabled:opacity-40"
               >
                 <svg viewBox="0 0 24 24" className="h-4.5 w-4.5" aria-hidden>
@@ -682,6 +700,32 @@ export function TripView({ trip }: { trip: TripDetailDTO }) {
           onDelete={isAdmin && entrySheet.entry ? () => remove(entrySheet.entry as ExpenseDTO) : undefined}
         />
       ) : null}
+
+      <Sheet open={downloadOpen} onClose={() => setDownloadOpen(false)} title="Download statement">
+        <ul className="mb-3 divide-y divide-ios-separator overflow-hidden rounded-ios bg-ios-surface-2">
+          {[
+            { label: "PDF", hint: "To print or share", busy: pdfBusy, run: exportPdf },
+            { label: "Excel", hint: "To sort, filter and total", busy: excelBusy, run: exportExcel },
+          ].map((option) => (
+            <li key={option.label}>
+              <button
+                type="button"
+                disabled={option.busy}
+                onClick={() => {
+                  setDownloadOpen(false);
+                  void option.run();
+                }}
+                className="flex h-14 w-full items-center justify-between px-4 text-left active:bg-ios-surface disabled:opacity-50"
+              >
+                <span className="text-[15px] font-medium text-ios-blue">
+                  {option.busy ? `Preparing ${option.label}…` : option.label}
+                </span>
+                <span className="text-[13px] text-ios-label-3">{option.hint}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </Sheet>
 
       <TripMenuSheet
         open={menuOpen}

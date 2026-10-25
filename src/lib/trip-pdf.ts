@@ -1,7 +1,7 @@
 import { jsPDF } from "jspdf";
 
 import { escapeHtml, TAMIL_FONT_STACK } from "./pdf";
-import { tripPersonTotals } from "./expenses/trip-summary";
+import { formatTripDate as formatDate, tripDatesLabel, tripPersonTotals } from "./expenses/trip-summary";
 import type { TripDetailDTO } from "./expenses/types";
 
 const A4_WIDTH_MM = 210;
@@ -17,27 +17,6 @@ function inr(value: number): string {
   return `₹${Math.round(value).toLocaleString("en-IN")}`;
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
-}
-
-/**
- * "20 Oct 2026 to 22 Oct 2026 (3 days)" — the first and last expense dates,
- * which is when the trip actually ran; closing it can come days later.
- */
-function tripDatesLabel(trip: TripDetailDTO): string {
-  if (trip.entries.length === 0) return "";
-  const times = trip.entries.map((entry) => Date.parse(entry.spentAt));
-  const first = new Date(Math.min(...times));
-  const last = new Date(Math.max(...times));
-  const dayOf = (date: Date) => Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
-  const days = Math.round((dayOf(last) - dayOf(first)) / 86_400_000) + 1;
-  const range =
-    days === 1
-      ? formatDate(first.toISOString())
-      : `${formatDate(first.toISOString())} to ${formatDate(last.toISOString())}`;
-  return `${range} (${days} day${days === 1 ? "" : "s"})`;
-}
 
 type Align = "left" | "right" | "center";
 
