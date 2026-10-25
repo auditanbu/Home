@@ -208,7 +208,7 @@ function addContactFooterToAllPages(doc: jsPDF, language: "en", margin: number) 
   }
 }
 
-function escapeHtml(value: string): string {
+export function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -228,7 +228,7 @@ function escapeHtml(value: string): string {
 // The device faces stay behind it for the case where it has not loaded. This
 // is what makes the printed sheet match the screen instead of depending on
 // the machine.
-const TAMIL_FONT_STACK =
+export const TAMIL_FONT_STACK =
   "var(--font-tamil), 'Noto Sans Tamil', 'Tamil Sangam MN', 'Tamil MN', 'Nirmala UI', -apple-system, sans-serif";
 
 const TAMIL_PAGE_MARGIN_MM = 14;
