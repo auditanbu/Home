@@ -155,7 +155,7 @@ export function TripView({ trip }: { trip: TripDetailDTO }) {
     setError(null);
     try {
       const { downloadTripPdf } = await import("@/lib/trip-pdf");
-      downloadTripPdf(trip);
+      await downloadTripPdf(trip);
     } catch {
       setError("Could not generate the PDF. Please try again.");
     } finally {
