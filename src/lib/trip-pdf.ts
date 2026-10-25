@@ -21,6 +21,24 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 }
 
+/**
+ * "20 Oct 2026 to 22 Oct 2026 (3 days)" — the first and last expense dates,
+ * which is when the trip actually ran; closing it can come days later.
+ */
+function tripDatesLabel(trip: TripDetailDTO): string {
+  if (trip.entries.length === 0) return "";
+  const times = trip.entries.map((entry) => Date.parse(entry.spentAt));
+  const first = new Date(Math.min(...times));
+  const last = new Date(Math.max(...times));
+  const dayOf = (date: Date) => Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+  const days = Math.round((dayOf(last) - dayOf(first)) / 86_400_000) + 1;
+  const range =
+    days === 1
+      ? formatDate(first.toISOString())
+      : `${formatDate(first.toISOString())} to ${formatDate(last.toISOString())}`;
+  return `${range} (${days} day${days === 1 ? "" : "s"})`;
+}
+
 type Align = "left" | "right" | "center";
 
 const CELL = "padding:1.8mm 2.2mm; border:1px solid #c8c8cd; vertical-align:middle;";
@@ -76,6 +94,7 @@ function sectionHtml(title: string, body: string): string {
 function statementHtml(trip: TripDetailDTO): string {
   const people = tripPersonTotals(trip);
   const participants = trip.participants.length;
+  const dates = tripDatesLabel(trip);
 
   const header = `
     <div data-row>
@@ -87,6 +106,7 @@ function statementHtml(trip: TripDetailDTO): string {
         <div>${escapeHtml(trip.participants.map((person) => person.name).join(", "))}</div>
         <div style="color:#777; flex:none;">${trip.closedAt ? `Closed ${formatDate(trip.closedAt)}` : "Open"}</div>
       </div>
+      ${dates ? `<div style="margin-top:1.5mm; font-size:9.5pt;"><span style="color:#777;">Trip dates:</span> ${escapeHtml(dates)}</div>` : ""}
       <div style="border-bottom:1px solid #ccc; margin:3mm 0;"></div>
       <div style="font-size:12pt; font-weight:700;">Total spent: ${inr(trip.total)}</div>
     </div>`;
