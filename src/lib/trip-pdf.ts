@@ -9,7 +9,8 @@ import type { TripDetailDTO } from "./expenses/types";
  * statement spells the currency out instead of reusing formatPrice.
  */
 function rupees(value: number): string {
-  return `Rs. ${value.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  // Whole rupees: a printed statement reads cleaner without paise.
+  return `Rs. ${Math.round(value).toLocaleString("en-IN")}`;
 }
 
 function formatDate(iso: string): string {
@@ -20,7 +21,7 @@ type AutoTableDoc = jsPDF & { lastAutoTable?: { finalY: number } };
 
 /**
  * A closed trip's statement: the total, what each person spent and paid,
- * the category breakdown, every expense, and who still owes whom — the same
+ * the category breakdown, every expense, and what is still pending — the same
  * story the WhatsApp share tells, in a form that can be kept or printed.
  */
 export function buildTripPdf(trip: TripDetailDTO): jsPDF {
@@ -101,9 +102,9 @@ export function buildTripPdf(trip: TripDetailDTO): jsPDF {
       rupees(person.spent),
       rupees(person.paid),
       person.net > 0
-        ? `Gets ${rupees(person.net)}`
+        ? `${rupees(person.net)} to receive`
         : person.net < 0
-          ? `Owes ${rupees(Math.abs(person.net))}`
+          ? `${rupees(Math.abs(person.net))} pending`
           : "Settled",
     ]),
     foot: [
@@ -161,7 +162,7 @@ export function buildTripPdf(trip: TripDetailDTO): jsPDF {
     advance();
   }
 
-  heading("Who owes whom");
+  heading("Pending payments");
   autoTable(doc, {
     ...tableStyles,
     startY: cursorY,
@@ -169,7 +170,7 @@ export function buildTripPdf(trip: TripDetailDTO): jsPDF {
     body:
       trip.transfers.length > 0
         ? trip.transfers.map((transfer) => [transfer.fromName, transfer.toName, rupees(transfer.amount)])
-        : [[{ content: "Fully settled - nobody owes anybody.", colSpan: 3 }]],
+        : [[{ content: "Fully settled - no pending payments.", colSpan: 3 }]],
     columnStyles: { 2: { halign: "right", cellWidth: 40 } },
   });
   advance();

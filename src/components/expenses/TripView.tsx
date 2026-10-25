@@ -133,12 +133,12 @@ export function TripView({ trip }: { trip: TripDetailDTO }) {
     }
 
     if (trip.transfers.length > 0) {
-      lines.push("*Who owes whom*");
+      lines.push("*Pending payments*");
       for (const transfer of trip.transfers) {
-        lines.push(`- ${transfer.fromName} owes ${transfer.toName}: ${formatPrice(transfer.amount)}`);
+        lines.push(`- ${transfer.fromName}: ${formatPrice(transfer.amount)} pending to ${transfer.toName}`);
       }
     } else {
-      lines.push("Fully settled — nobody owes anybody.");
+      lines.push("Fully settled — no pending payments.");
     }
 
     return `https://wa.me/?text=${encodeURIComponent(lines.join("\n"))}`;
@@ -475,7 +475,7 @@ export function TripView({ trip }: { trip: TripDetailDTO }) {
                 ? trip.entries.length === 0
                   ? ""
                   : "Settled"
-                : `${trip.transfers.length} to settle`}
+                : `${trip.transfers.length} pending`}
             </span>
             <svg
               viewBox="0 0 24 24"
@@ -497,7 +497,7 @@ export function TripView({ trip }: { trip: TripDetailDTO }) {
           <p className="ios-card p-5 text-[15px] text-ios-label-2">
             {trip.entries.length === 0
               ? "Add an expense to get started."
-              : "Fully settled — nobody owes anybody on this trip."}
+              : "Fully settled — no pending payments on this trip."}
           </p>
         ) : (
           <ul className="ios-card divide-y divide-ios-separator overflow-hidden">
@@ -512,7 +512,7 @@ export function TripView({ trip }: { trip: TripDetailDTO }) {
                     <div className="flex min-h-[3.25rem] items-center gap-3 px-4 py-2.5">
                       <NameToggle name={balance.personName} expanded={expanded} onClick={toggle} />
                       <span className="flex-none text-[15px] font-semibold tabular-nums text-ios-green">
-                        is owed {formatPrice(balance.net)}
+                        {formatPrice(balance.net)} to receive
                       </span>
                     </div>
                     {expanded ? <PersonEntries entries={paidEntries} /> : null}
@@ -530,7 +530,7 @@ export function TripView({ trip }: { trip: TripDetailDTO }) {
                     <div className="flex min-h-[3.25rem] items-center gap-3 px-4 py-2.5">
                       <NameToggle name={balance.personName} expanded={expanded} onClick={toggle} />
                       <span className="flex-none text-[15px] font-semibold tabular-nums text-ios-red">
-                        owes {formatPrice(Math.abs(balance.net))}
+                        {formatPrice(Math.abs(balance.net))} pending
                       </span>
                     </div>
                     {expanded ? <PersonEntries entries={paidEntries} /> : null}
@@ -560,7 +560,7 @@ export function TripView({ trip }: { trip: TripDetailDTO }) {
                       </svg>
                     </button>
                     <NameToggle
-                      name={`${transfer.fromName} owes ${transfer.toName}`}
+                      name={`${transfer.fromName} pending to ${transfer.toName}`}
                       expanded={expanded}
                       onClick={toggle}
                     />
@@ -824,7 +824,7 @@ function TripMenuSheet({
   );
 }
 
-/** The tappable name (or "X owes Y") on a balance row — unfolds that person's own entries. */
+/** The tappable name (or "X pending to Y") on a balance row — unfolds that person's own entries. */
 function NameToggle({
   name,
   expanded,
