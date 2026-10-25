@@ -41,7 +41,7 @@ function tripDatesLabel(trip: TripDetailDTO): string {
 
 type Align = "left" | "right" | "center";
 
-const CELL = "padding:1.8mm 2.2mm; border:1px solid #c8c8cd; vertical-align:middle;";
+const CELL = "padding:2mm 2.5mm; border:1px solid #c8c8cd; vertical-align:middle;";
 
 /**
  * One table of the statement. Every body and footer row carries `data-row`,
@@ -78,11 +78,35 @@ function tableHtml({
         .join("")}</tr>`
     : "";
 
-  return `<table style="width:100%; border-collapse:collapse; font-size:9.5pt;"><thead>${headHtml}</thead><tbody>${bodyHtml}${footHtml}</tbody></table>`;
+  return `<table style="width:100%; border-collapse:collapse; font-size:11pt;"><thead>${headHtml}</thead><tbody>${bodyHtml}${footHtml}</tbody></table>`;
+}
+
+/**
+ * By category as bars rather than a bare list: each bar's length is that
+ * category's slice of the trip, so the biggest spends stand out before any
+ * number is read. Each line is still a `data-row` break point.
+ */
+function categoryChartHtml(categories: [string, number][], total: number): string {
+  const percent = (value: number) => (total > 0 ? Math.round((value / total) * 100) : 0);
+  const cell = "padding:2mm 1.5mm; border-bottom:1px solid #e5e5ea; vertical-align:middle;";
+  const line = (name: string, amount: string, pct: number, bar: string, bold = false) => `
+    <tr data-row style="${bold ? "font-weight:700;" : ""}">
+      <td style="${cell} width:36mm; white-space:nowrap;">${escapeHtml(name)}</td>
+      <td style="${cell}">${bar}</td>
+      <td style="${cell} width:13mm; text-align:right; color:#555;">${pct}%</td>
+      <td style="${cell} width:26mm; text-align:right;">${amount}</td>
+    </tr>`;
+  const bar = (pct: number) =>
+    `<div style="height:4.5mm; border-radius:2.25mm; background:#e5e5ea;"><div style="height:100%; width:${Math.max(pct, 1)}%; border-radius:2.25mm; background:#0a84ff;"></div></div>`;
+
+  return `<table style="width:100%; border-collapse:collapse; font-size:11pt;"><tbody>${
+    categories.map(([name, amount]) => line(name, inr(amount), percent(amount), bar(percent(amount)))).join("") +
+    line("Total", inr(total), 100, "", true)
+  }</tbody></table>`;
 }
 
 function sectionHtml(title: string, body: string): string {
-  return `<section data-row style="margin-top:7mm;"><h2 style="font-size:12pt; font-weight:700; margin:0 0 2mm;">${escapeHtml(title)}</h2>${body}</section>`;
+  return `<section data-row style="margin-top:7mm;"><h2 style="font-size:14pt; font-weight:700; margin:0 0 2.5mm;">${escapeHtml(title)}</h2>${body}</section>`;
 }
 
 /**
@@ -99,22 +123,22 @@ function statementHtml(trip: TripDetailDTO): string {
   const header = `
     <div data-row>
       <div style="display:flex; justify-content:space-between; align-items:baseline; gap:6mm;">
-        <div style="font-size:16pt; font-weight:700;">${escapeHtml(trip.name)}</div>
-        <div style="font-size:10pt; flex:none;">Trip statement</div>
+        <div style="font-size:20pt; font-weight:700;">${escapeHtml(trip.name)}</div>
+        <div style="font-size:11pt; flex:none;">Trip statement</div>
       </div>
-      <div style="display:flex; justify-content:space-between; align-items:baseline; gap:6mm; margin-top:1.5mm; font-size:9.5pt;">
+      <div style="display:flex; justify-content:space-between; align-items:baseline; gap:6mm; margin-top:1.5mm; font-size:11pt;">
         <div>${escapeHtml(trip.participants.map((person) => person.name).join(", "))}</div>
         <div style="color:#777; flex:none;">${trip.closedAt ? `Closed ${formatDate(trip.closedAt)}` : "Open"}</div>
       </div>
-      ${dates ? `<div style="margin-top:1.5mm; font-size:9.5pt;"><span style="color:#777;">Trip dates:</span> ${escapeHtml(dates)}</div>` : ""}
+      ${dates ? `<div style="margin-top:1.5mm; font-size:11pt;"><span style="color:#777;">Trip dates:</span> ${escapeHtml(dates)}</div>` : ""}
       <div style="border-bottom:1px solid #ccc; margin:3mm 0;"></div>
-      <div style="font-size:12pt; font-weight:700;">Total spent: ${inr(trip.total)}</div>
+      <div style="font-size:15pt; font-weight:700;">Total spent: ${inr(trip.total)}</div>
     </div>`;
 
   const byPerson = sectionHtml(
     "Spent by person",
     tableHtml({
-      head: ["Person", "Spent (share)", "Paid", "Balance"],
+      head: ["Person", "Share", "Paid", "Balance"],
       rows: people.map((person) => [
         person.name,
         inr(person.spent),
@@ -143,12 +167,7 @@ function statementHtml(trip: TripDetailDTO): string {
     categories.size > 0
       ? sectionHtml(
           "By category",
-          tableHtml({
-            head: ["Category", "Amount"],
-            rows: [...categories.entries()].sort((a, b) => b[1] - a[1]).map(([name, total]) => [name, inr(total)]),
-            align: ["left", "right"],
-            widths: [undefined, "34mm"],
-          }),
+          categoryChartHtml([...categories.entries()].sort((a, b) => b[1] - a[1]), trip.total),
         )
       : "";
 
@@ -173,7 +192,7 @@ function statementHtml(trip: TripDetailDTO): string {
             }),
             foot: ["", "", "Total", "", "", inr(trip.total)],
             align: ["center", "left", "left", "left", "center", "right"],
-            widths: ["8mm", "25mm", undefined, "26mm", "18mm", "24mm"],
+            widths: ["8mm", "27mm", undefined, "28mm", "18mm", "26mm"],
           }),
         )
       : "";
@@ -207,7 +226,12 @@ function statementHtml(trip: TripDetailDTO): string {
         )
       : "";
 
-  return header + byPerson + byCategory + expenses + pending + settled;
+  // The rupee sign comes out small next to the digits in most fonts; give it
+  // a bit more presence. It only ever comes from inr(), already escaped.
+  return (header + byPerson + byCategory + expenses + pending + settled).replace(
+    /₹/g,
+    '<span style="font-size:1.2em; font-weight:600; line-height:1;">₹</span>',
+  );
 }
 
 /**
@@ -260,7 +284,7 @@ export async function buildTripPdf(trip: TripDetailDTO): Promise<jsPDF> {
     backgroundColor: "#ffffff",
     color: "#111",
     fontFamily: TAMIL_FONT_STACK,
-    fontSize: "10pt",
+    fontSize: "11pt",
     lineHeight: "1.35",
   });
   column.innerHTML = statementHtml(trip);
