@@ -4,17 +4,20 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 
-import { CategoryIcon, CheckIcon } from "@/components/FilterSheet";
+import { CategoryIcon, CheckIcon, ShopIcon } from "@/components/FilterSheet";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { Sheet } from "@/components/Sheet";
 import { SizeField } from "@/components/SizeField";
 import { SizePill } from "@/components/SizePill";
 import { Stepper } from "@/components/Stepper";
 import {
+  createShop,
   deleteCategory,
   deleteMasterItem,
+  deleteShop,
   fillTanglishNames,
   fixKnownTranslations,
+  renameShop,
   setMasterItemActive,
   updateCategory,
   upsertMasterItem,
@@ -138,6 +141,10 @@ export function MasterBrowser({ items, categories, shops }: MasterBrowserProps) 
     Record<number, { nameEn: string; nameTa: string }>
   >({});
   const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [shopsOpen, setShopsOpen] = useState(false);
+  const [shopDrafts, setShopDrafts] = useState<Record<number, string>>({});
+  const [newShopName, setNewShopName] = useState("");
+  const [shopError, setShopError] = useState<string | null>(null);
 
   const groups = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -181,6 +188,14 @@ export function MasterBrowser({ items, categories, shops }: MasterBrowserProps) 
     const counts = new Map<number, number>();
     for (const item of items) {
       counts.set(item.categoryId, (counts.get(item.categoryId) ?? 0) + 1);
+    }
+    return counts;
+  }, [items]);
+
+  const shopItemCounts = useMemo(() => {
+    const counts = new Map<number, number>();
+    for (const item of items) {
+      if (item.shopId !== null) counts.set(item.shopId, (counts.get(item.shopId) ?? 0) + 1);
     }
     return counts;
   }, [items]);
@@ -279,6 +294,60 @@ export function MasterBrowser({ items, categories, shops }: MasterBrowserProps) 
     setCategoriesOpen(true);
   };
 
+  const openShops = () => {
+    setShopError(null);
+    setNewShopName("");
+    setShopDrafts(Object.fromEntries(shops.map((shop) => [shop.id, shop.name])));
+    setShopsOpen(true);
+  };
+
+  const addShop = () => {
+    const name = newShopName.trim();
+    if (!name) return;
+    if (shops.some((shop) => shop.name.toLowerCase() === name.toLowerCase())) {
+      setShopError(`"${name}" already exists.`);
+      return;
+    }
+    setShopError(null);
+    startTransition(async () => {
+      const result = await createShop(name);
+      if (!result.ok) {
+        setShopError(result.error);
+        return;
+      }
+      setNewShopName("");
+      setShopDrafts((prev) => ({ ...prev, [result.data.id]: name }));
+      router.refresh();
+    });
+  };
+
+  const saveShop = (shopId: number) => {
+    const name = shopDrafts[shopId];
+    if (name === undefined) return;
+    setShopError(null);
+    startTransition(async () => {
+      const result = await renameShop({ id: shopId, name });
+      if (!result.ok) {
+        setShopError(result.error);
+        return;
+      }
+      router.refresh();
+    });
+  };
+
+  const removeShop = (shop: ShopDTO) => {
+    if (!window.confirm(`Delete the shop "${shop.name}"? This can't be undone.`)) return;
+    setShopError(null);
+    startTransition(async () => {
+      const result = await deleteShop(shop.id);
+      if (!result.ok) {
+        setShopError(result.error);
+        return;
+      }
+      router.refresh();
+    });
+  };
+
   const runAutoFix = () => {
     setAutoFixMessage(null);
     startTransition(async () => {
@@ -366,6 +435,15 @@ export function MasterBrowser({ items, categories, shops }: MasterBrowserProps) 
             }`}
           >
             <CategoryIcon />
+          </button>
+          <button
+            type="button"
+            onClick={openShops}
+            aria-label="Manage shops"
+            title="Shops"
+            className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-ios-surface text-ios-blue shadow-ios transition active:scale-95"
+          >
+            <ShopIcon />
           </button>
           <button
             type="button"
@@ -869,6 +947,88 @@ export function MasterBrowser({ items, categories, shops }: MasterBrowserProps) 
           })}
 
           {categoryError ? <p className="text-[14px] text-ios-red">{categoryError}</p> : null}
+        </div>
+      </Sheet>
+
+      <Sheet
+        open={shopsOpen}
+        onClose={() => setShopsOpen(false)}
+        title="Shops"
+        subtitle="Where items are bought. A shop can only be deleted when no item, list or price history uses it."
+      >
+        <div className="space-y-3 pb-2">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              addShop();
+            }}
+            className="flex items-end gap-2 border-b border-ios-separator pb-3"
+          >
+            <label className="min-w-0 flex-1 block">
+              <span className="text-[12px] font-medium text-ios-label-2">New shop</span>
+              <input
+                value={newShopName}
+                onChange={(event) => setNewShopName(event.target.value)}
+                placeholder="Shop name"
+                className="mt-1 h-10 w-full rounded-ios bg-ios-surface-2 px-3 text-[15px] outline-none ring-1 ring-inset ring-ios-separator focus:ring-2 focus:ring-ios-blue"
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={pending || !newShopName.trim()}
+              className="h-10 flex-none rounded-full bg-ios-blue px-4 text-[13px] font-semibold text-white transition active:scale-95 disabled:opacity-50"
+            >
+              Add
+            </button>
+          </form>
+
+          {shops.length === 0 ? (
+            <p className="text-[14px] text-ios-label-2">No shops yet.</p>
+          ) : null}
+
+          {shops.map((shop) => {
+            const name = shopDrafts[shop.id] ?? shop.name;
+            const itemCount = shopItemCounts.get(shop.id) ?? 0;
+            const changed = name.trim() !== shop.name;
+            return (
+              <div key={shop.id} className="space-y-2 border-b border-ios-separator pb-3">
+                <div className="flex items-center gap-2">
+                  <input
+                    value={name}
+                    onChange={(event) =>
+                      setShopDrafts((prev) => ({ ...prev, [shop.id]: event.target.value }))
+                    }
+                    aria-label={`Name of ${shop.name}`}
+                    className="h-10 min-w-0 flex-1 rounded-ios bg-ios-surface-2 px-3 text-[15px] outline-none ring-1 ring-inset ring-ios-separator focus:ring-2 focus:ring-ios-blue"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => saveShop(shop.id)}
+                    disabled={pending || !changed || !name.trim()}
+                    className="h-10 flex-none rounded-full bg-ios-blue px-3 text-[13px] font-semibold text-white transition active:scale-95 disabled:opacity-50"
+                  >
+                    Rename
+                  </button>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[12px] text-ios-label-2">
+                    {itemCount} item{itemCount === 1 ? "" : "s"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeShop(shop)}
+                    disabled={pending || itemCount > 0}
+                    title={itemCount > 0 ? "Change these items to another shop first" : undefined}
+                    className="text-[13px] font-medium text-ios-red active:opacity-60 disabled:opacity-40"
+                  >
+                    Delete shop
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+
+          {shopError ? <p className="text-[14px] text-ios-red">{shopError}</p> : null}
         </div>
       </Sheet>
     </div>
