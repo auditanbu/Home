@@ -711,6 +711,47 @@ export async function createShop(name: string): Promise<ActionResult<{ id: numbe
   return { ok: true, data: { id: shop.id } };
 }
 
+export async function renameShop(input: { id: number; name: string }): Promise<ActionResult> {
+  const name = input.name.trim();
+  if (!name) return fail("Shop name is required.");
+
+  const clash = await prisma.shop.findFirst({
+    where: { name, NOT: { id: input.id } },
+    select: { id: true },
+  });
+  if (clash) return fail(`"${name}" already exists.`);
+
+  await prisma.shop.update({ where: { id: input.id }, data: { name } });
+  revalidatePath("/grocery", "layout");
+  return { ok: true };
+}
+
+/**
+ * Only removable when nothing points at it. The foreign keys are
+ * onDelete: SetNull, so the database would happily delete a shop that past
+ * lists and price history still name — and silently blank the shop out of
+ * that history. Refuse instead, the same way an in-use category is refused.
+ */
+export async function deleteShop(shopId: number): Promise<ActionResult> {
+  const [items, listRows, prices] = await Promise.all([
+    prisma.item.count({ where: { shopId } }),
+    prisma.groceryListItem.count({ where: { shopId } }),
+    prisma.priceHistory.count({ where: { shopId } }),
+  ]);
+  if (items > 0) {
+    return fail(
+      `${items} item${items === 1 ? " still uses" : "s still use"} this shop — change their shop first.`,
+    );
+  }
+  if (listRows > 0 || prices > 0) {
+    return fail("This shop appears in your grocery lists or price history, so it can't be deleted.");
+  }
+
+  await prisma.shop.delete({ where: { id: shopId } });
+  revalidatePath("/grocery", "layout");
+  return { ok: true };
+}
+
 export async function createCategory(input: {
   nameEn: string;
   nameTa?: string;
